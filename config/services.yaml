@@ -1,0 +1,77 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+    mongodb_uri: '%env(BROADWAY_READ_MODEL_MONGODB_URI)%'
+    mongodb_database: '%env(BROADWAY_READ_MODEL_MONGODB_DATABASE)%'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            $eventBus: "@broadway.event_handling.event_bus"
+            $eventStore: '@Broadway\EventStore\Dbal\DBALEventStore'
+    _instanceof:
+        Broadway\EventHandling\EventListener:
+            public: true
+            tags:
+                - { name: broadway.domain.event_listener }
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+            - '../src/Tests/'
+
+    # controllers are imported separately to make sure services can be injected
+    # as action arguments even if you don't extend any base controller class
+    App\Application\UI\Controllers\:
+        resource: '../src/Application/UI/Controllers/'
+        tags: ['controller.service_arguments']
+
+
+    App\Application\Command\Handler\:
+        resource: '../src/Application/Command/Handler/'
+        autoconfigure: false
+        tags: [{ name: messenger.message_handler, bus: command.bus }]
+
+    App\Application\Query\Handler\:
+        resource: '../src/Application/Query/Handler/'
+        autoconfigure: false
+        tags: [{ name: messenger.message_handler, bus: query.bus }]
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+    Broadway\EventStore\Dbal\DBALEventStore:
+        arguments:
+            - "@doctrine.dbal.default_connection"
+            - "@broadway.serializer.payload"
+            - "@broadway.serializer.metadata"
+            - "events"
+            - false
+            - "@broadway.uuid.converter"
+
+    broadway.read_model.mongodb_client:
+        class: MongoDB\Client
+        arguments: [ '%mongodb_uri%' ]
+
+    broadway.read_model.mongodb_collection:
+        class: MongoDB\Collection
+        factory: [ '@broadway.read_model.mongodb_client', selectCollection ]
+        arguments: [ '%mongodb_database%', 'read_models' ]
+
+    broadway.read_model.mongodb.repository_factory:
+        class: Broadway\ReadModel\MongoDB\MongoDBRepositoryFactory
+        arguments:
+            - "@broadway.read_model.mongodb_collection"
+            - "@broadway.serializer.readmodel"
+    Broadway\ReadModel\MongoDB\MongoDBRepositoryFactory:
+        arguments:
+            - "@broadway.read_model.mongodb_collection"
+            - "@broadway.serializer.readmodel"

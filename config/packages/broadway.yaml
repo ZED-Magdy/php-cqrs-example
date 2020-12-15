@@ -1,0 +1,12 @@
+# see https://github.com/broadway/broadway-bundle
+
+broadway:
+
+    # a service definition id implementing Broadway\EventStore\EventStore
+    event_store: broadway.event_store.dbal
+
+    # a service definition id implementing Broadway\ReadModel\RepositoryFactory
+    read_model: broadway.read_model.mongodb.repository_factory
+
+    command_handling:
+        dispatch_events: true
